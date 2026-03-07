@@ -1,8 +1,10 @@
 import { BlockPermutation, GameMode, system, world } from "@minecraft/server";
+import { ActionFormData, MessageFormData, ModalFormData } from "@minecraft/server-ui";
 
 const TICKS_PER_SECOND = 20;
-const SCHEDULER_INTERVAL = 100;
-const GLOBAL_COOLDOWN_TICKS = 4800;
+const SCHEDULER_INTERVAL = 20;
+const SCHEDULE_RETRY_TICKS = 300;
+const ADMIN_FORM_DEBOUNCE_TICKS = 10;
 const RECENT_HISTORY_SIZE = 5;
 const BLOCK_QUEUE_PER_TICK = 48;
 const BLOCK_QUEUE_PER_EVENT = 1200;
@@ -16,7 +18,10 @@ const SEA_LEVEL_Y = 63;
 const ACTIVE_PROPERTY_KEY = "wondercraft:disasters_active";
 const HISTORY_PROPERTY_KEY = "wondercraft:disasters_history";
 const COOLDOWN_PROPERTY_KEY = "wondercraft:disasters_cooldown";
+const CONFIG_PROPERTY_KEY = "wondercraft:disasters_config";
 const TEMP_ENTITY_TAG = "wondercraft.disaster_temp";
+const ADMIN_TAG = "admin";
+const CLOCK_ITEM_ID = "minecraft:clock";
 
 const AIR = "minecraft:air";
 const WATER = "minecraft:water";
@@ -86,6 +91,154 @@ const CROP_BLOCKS = new Set([
   "minecraft:bamboo",
   "minecraft:nether_wart",
 ]);
+
+const DIFFICULTY_SETTINGS = Object.freeze({
+  easy: Object.freeze({
+    id: "easy",
+    label: "Easy",
+    minDelayTicks: 7200,
+    maxDelayTicks: 10800,
+  }),
+  mid: Object.freeze({
+    id: "mid",
+    label: "Mid",
+    minDelayTicks: 3600,
+    maxDelayTicks: 6000,
+  }),
+  hard: Object.freeze({
+    id: "hard",
+    label: "Hard",
+    minDelayTicks: 1800,
+    maxDelayTicks: 3600,
+  }),
+});
+
+const DIFFICULTY_IDS = Object.freeze(Object.keys(DIFFICULTY_SETTINGS));
+
+const DISASTER_FX_PROFILE_MAP = Object.freeze({
+  sinkhole: "earth",
+  earthquake: "earth",
+  cave_in: "earth",
+  fissure: "earth",
+  tectonic_shift: "earth",
+  rock_slide: "earth",
+  landslide_avalanche: "earth",
+  tornado: "storm",
+  acid_rain: "storm",
+  extreme_winds: "storm",
+  blizzard: "storm",
+  sandstorm: "storm",
+  hurricane: "storm",
+  solar_storm: "storm",
+  monsoon: "storm",
+  frostbite_winds: "storm",
+  electromagnetic_storm: "storm",
+  hail_storm: "storm",
+  water_geyser: "water",
+  tsunami: "water",
+  underground_flooding: "water",
+  acidic_swamps: "water",
+  lava_geyser: "fire",
+  supernova: "cosmic",
+  volcanic_eruption: "fire",
+  wildfire: "fire",
+  lightning_wildfire: "fire",
+  soul_storm: "swarm",
+  purge: "swarm",
+  infested_caves: "swarm",
+  swarming_bees: "swarm",
+  black_plague: "fog",
+  super_fog: "fog",
+  meteor_shower: "cosmic",
+  end_storm: "cosmic",
+});
+
+const DISASTER_FX_PROFILES = Object.freeze({
+  earth: Object.freeze({
+    particleInterval: 12,
+    particleIds: ["minecraft:basic_smoke_particle"],
+    particleCount: 5,
+    particleSpread: 4,
+    particleHeight: 2,
+    soundInterval: 50,
+    soundIds: ["dig.stone", "step.stone"],
+    volume: 1.1,
+    pitchMin: 0.8,
+    pitchMax: 1.05,
+  }),
+  storm: Object.freeze({
+    particleInterval: 8,
+    particleIds: ["minecraft:basic_smoke_particle"],
+    particleCount: 7,
+    particleSpread: 6,
+    particleHeight: 3,
+    soundInterval: 60,
+    soundIds: ["ambient.weather.thunder", "ambient.weather.rain"],
+    volume: 1.3,
+    pitchMin: 0.9,
+    pitchMax: 1.15,
+  }),
+  water: Object.freeze({
+    particleInterval: 10,
+    particleIds: ["minecraft:water_splash_particle"],
+    particleCount: 6,
+    particleSpread: 5,
+    particleHeight: 2,
+    soundInterval: 45,
+    soundIds: ["ambient.weather.rain", "bucket.empty_water"],
+    volume: 1.0,
+    pitchMin: 0.85,
+    pitchMax: 1.1,
+  }),
+  fire: Object.freeze({
+    particleInterval: 8,
+    particleIds: ["minecraft:basic_flame_particle", "minecraft:lava_particle"],
+    particleCount: 6,
+    particleSpread: 5,
+    particleHeight: 3,
+    soundInterval: 40,
+    soundIds: ["fire.fire", "random.explode"],
+    volume: 1.2,
+    pitchMin: 0.85,
+    pitchMax: 1.2,
+  }),
+  swarm: Object.freeze({
+    particleInterval: 14,
+    particleIds: ["minecraft:basic_smoke_particle"],
+    particleCount: 4,
+    particleSpread: 4,
+    particleHeight: 2,
+    soundInterval: 35,
+    soundIds: ["mob.bee.loop", "mob.bee.say"],
+    volume: 0.9,
+    pitchMin: 0.9,
+    pitchMax: 1.15,
+  }),
+  fog: Object.freeze({
+    particleInterval: 10,
+    particleIds: ["minecraft:basic_smoke_particle"],
+    particleCount: 8,
+    particleSpread: 7,
+    particleHeight: 2,
+    soundInterval: 70,
+    soundIds: ["ambient.cave", "mob.witch.ambient"],
+    volume: 0.8,
+    pitchMin: 0.75,
+    pitchMax: 1.0,
+  }),
+  cosmic: Object.freeze({
+    particleInterval: 10,
+    particleIds: ["minecraft:endrod", "minecraft:portal_directional"],
+    particleCount: 6,
+    particleSpread: 6,
+    particleHeight: 4,
+    soundInterval: 50,
+    soundIds: ["mob.endermen.portal", "random.explode"],
+    volume: 1.2,
+    pitchMin: 0.8,
+    pitchMax: 1.2,
+  }),
+});
 
 export const DISASTER_TIER_WEIGHTS = Object.freeze({
   common: 6,
@@ -199,10 +352,15 @@ const runtimeState = {
   cooldownUntilTick: 0,
   blockQueue: [],
   pendingMessages: [],
+  config: null,
 };
 
 let initialized = false;
 const permutationCache = new Map();
+const adminFormState = {
+  openPlayers: new Set(),
+  useDebounceUntil: new Map(),
+};
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -308,6 +466,22 @@ function createRng(seed) {
 
 function currentTick() {
   return Number(system.currentTick ?? 0);
+}
+
+function normalizeDifficulty(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (DIFFICULTY_SETTINGS[normalized]) {
+    return normalized;
+  }
+  return "mid";
+}
+
+function getDifficultySettings(value) {
+  return DIFFICULTY_SETTINGS[normalizeDifficulty(value)];
+}
+
+function getDifficultyLabel(value) {
+  return getDifficultySettings(value).label;
 }
 
 function getDimensionSafe(dimensionId) {
@@ -513,6 +687,7 @@ function saveRuntimeState() {
     }
     world.setDynamicProperty(HISTORY_PROPERTY_KEY, JSON.stringify(runtimeState.recentHistory));
     world.setDynamicProperty(COOLDOWN_PROPERTY_KEY, String(runtimeState.cooldownUntilTick));
+    world.setDynamicProperty(CONFIG_PROPERTY_KEY, JSON.stringify(getRuntimeConfig()));
   } catch {
     // Dynamic property failures should not crash the runtime.
   }
@@ -523,13 +698,18 @@ function restoreRuntimeState() {
     const activeRaw = world.getDynamicProperty(ACTIVE_PROPERTY_KEY);
     const historyRaw = world.getDynamicProperty(HISTORY_PROPERTY_KEY);
     const cooldownRaw = world.getDynamicProperty(COOLDOWN_PROPERTY_KEY);
+    const configRaw = world.getDynamicProperty(CONFIG_PROPERTY_KEY);
     runtimeState.recentHistory = parseJsonArray(historyRaw);
     runtimeState.cooldownUntilTick = Number(cooldownRaw || 0) || 0;
     runtimeState.active = typeof activeRaw === "string" && activeRaw ? normalizeActiveState(JSON.parse(activeRaw)) : null;
+    runtimeState.config = typeof configRaw === "string" && configRaw
+      ? normalizeDisasterConfig(JSON.parse(configRaw))
+      : getDefaultDisasterConfig();
   } catch {
     runtimeState.active = null;
     runtimeState.recentHistory = [];
     runtimeState.cooldownUntilTick = 0;
+    runtimeState.config = getDefaultDisasterConfig();
   }
 }
 
@@ -668,6 +848,40 @@ function summonLightning(dimension, location) {
   } catch {
     // Ignore if the summon fails.
   }
+}
+
+function spawnParticleSafe(dimension, particleId, location) {
+  if (!particleId) {
+    return;
+  }
+  try {
+    dimension.spawnParticle(particleId, cloneLocation(location));
+  } catch {
+    // Ignore unsupported particle ids or runtimes.
+  }
+}
+
+function playSoundSafe(dimension, soundId, location, options) {
+  if (!soundId) {
+    return;
+  }
+  try {
+    dimension.playSound(soundId, cloneLocation(location), options);
+  } catch {
+    // Ignore unsupported sound ids or runtimes.
+  }
+}
+
+function sampleFxPoints(center, spread, count, height, rng) {
+  const points = [];
+  for (let index = 0; index < count; index += 1) {
+    points.push({
+      x: center.x + rng.int(-spread, spread),
+      y: center.y + rng.int(0, height),
+      z: center.z + rng.int(-spread, spread),
+    });
+  }
+  return points;
 }
 
 function trySpawnTracked(active, dimension, typeId, location) {
@@ -2011,6 +2225,7 @@ function createDisasterDefinition(spec) {
     id: spec.id,
     label: spec.label,
     tier: spec.tier,
+    fxProfile: spec.fxProfile || DISASTER_FX_PROFILE_MAP[spec.id] || "earth",
     durationTicks: spec.durationTicks,
     blockBudget: spec.blockBudget ?? BLOCK_QUEUE_PER_EVENT,
     mobBudget: spec.mobBudget ?? DEFAULT_MOB_BUDGET,
@@ -2802,6 +3017,107 @@ export const DISASTER_DEFINITIONS = Object.freeze(DISASTER_SPECS.map(createDisas
 
 const DISASTER_DEFINITION_MAP = new Map(DISASTER_DEFINITIONS.map((definition) => [definition.id, definition]));
 
+function getDefaultDisasterConfig() {
+  const enabledDisasters = {};
+  for (const definition of DISASTER_DEFINITIONS) {
+    enabledDisasters[definition.id] = true;
+  }
+  return {
+    difficulty: "mid",
+    autoSchedule: true,
+    enabledDisasters,
+  };
+}
+
+function normalizeDisasterConfig(value) {
+  const defaults = getDefaultDisasterConfig();
+  const enabledDisasters = { ...defaults.enabledDisasters };
+  if (value?.enabledDisasters && typeof value.enabledDisasters === "object") {
+    for (const definition of DISASTER_DEFINITIONS) {
+      if (Object.prototype.hasOwnProperty.call(value.enabledDisasters, definition.id)) {
+        enabledDisasters[definition.id] = value.enabledDisasters[definition.id] !== false;
+      }
+    }
+  }
+  return {
+    difficulty: normalizeDifficulty(value?.difficulty),
+    autoSchedule: value?.autoSchedule !== false,
+    enabledDisasters,
+  };
+}
+
+function getRuntimeConfig() {
+  if (!runtimeState.config) {
+    runtimeState.config = getDefaultDisasterConfig();
+  }
+  return runtimeState.config;
+}
+
+function applyDisasterConfig(nextConfig) {
+  runtimeState.config = normalizeDisasterConfig(nextConfig);
+  if (!runtimeState.config.autoSchedule || !getEnabledDisasterCount() || runtimeState.active) {
+    runtimeState.cooldownUntilTick = 0;
+  } else {
+    runtimeState.cooldownUntilTick = 0;
+    scheduleNextRandomDisaster({ persist: false });
+  }
+  persistActiveState();
+  return runtimeState.config;
+}
+
+function getEnabledDisasterCount() {
+  const config = getRuntimeConfig();
+  return DISASTER_DEFINITIONS.reduce((count, definition) => {
+    return count + (config.enabledDisasters[definition.id] !== false ? 1 : 0);
+  }, 0);
+}
+
+function isDisasterEnabledForAuto(disasterId) {
+  const config = getRuntimeConfig();
+  const normalizedId = normalizeDisasterId(disasterId);
+  return config.enabledDisasters[normalizedId] !== false;
+}
+
+function getNextDisasterDelayTicks() {
+  const difficulty = getRuntimeConfig().difficulty;
+  const settings = getDifficultySettings(difficulty);
+  const seed = hashString(`schedule:${getCurrentTick()}:${difficulty}:${runtimeState.recentHistory.join(",")}`);
+  return createRng(seed).int(settings.minDelayTicks, settings.maxDelayTicks);
+}
+
+function clearNextScheduledDisaster(persist = true) {
+  runtimeState.cooldownUntilTick = 0;
+  if (persist) {
+    persistActiveState();
+  }
+}
+
+function scheduleNextRandomDisaster(options = {}) {
+  const config = getRuntimeConfig();
+  if (!config.autoSchedule || !getEnabledDisasterCount() || runtimeState.active) {
+    runtimeState.cooldownUntilTick = 0;
+  } else {
+    const baseTick = Number(options.fromTick ?? getCurrentTick()) || getCurrentTick();
+    const delayTicks = options.retry ? SCHEDULE_RETRY_TICKS : getNextDisasterDelayTicks();
+    runtimeState.cooldownUntilTick = baseTick + delayTicks;
+  }
+  if (options.persist !== false) {
+    persistActiveState();
+  }
+  return runtimeState.cooldownUntilTick;
+}
+
+function ensureScheduledDisasterTick() {
+  const config = getRuntimeConfig();
+  if (!config.autoSchedule || !getEnabledDisasterCount() || runtimeState.active) {
+    runtimeState.cooldownUntilTick = 0;
+    return;
+  }
+  if (!runtimeState.cooldownUntilTick) {
+    scheduleNextRandomDisaster({ persist: false });
+  }
+}
+
 function getCurrentTick() {
   return currentTick();
 }
@@ -2823,6 +3139,39 @@ function buildDisasterContext(active, definition) {
     rng: createRng(hashString(`${active?.seed || 0}:${elapsed}:${active?.disasterId || "disaster"}`)),
     participants: getParticipantPlayers(),
   };
+}
+
+function emitActiveDisasterFx(active, context) {
+  const profileId = context.definition?.fxProfile || DISASTER_FX_PROFILE_MAP[active?.disasterId] || "earth";
+  const profile = DISASTER_FX_PROFILES[profileId];
+  if (!profile || !context.dimension) {
+    return;
+  }
+
+  if (profile.particleInterval && context.elapsed % profile.particleInterval === 0) {
+    const points = sampleFxPoints(
+      active.epicenter,
+      profile.particleSpread || 4,
+      profile.particleCount || 4,
+      profile.particleHeight || 2,
+      context.rng
+    );
+    for (const point of points) {
+      spawnParticleSafe(context.dimension, context.rng.pick(profile.particleIds || []), point);
+    }
+  }
+
+  if (profile.soundInterval && context.elapsed % profile.soundInterval === 0) {
+    const soundId = context.rng.pick(profile.soundIds || []);
+    if (soundId) {
+      playSoundSafe(context.dimension, soundId, addLocation(active.epicenter, { x: 0, y: 1, z: 0 }), {
+        volume: profile.volume ?? 1,
+        pitch: profile.pitchMin !== undefined && profile.pitchMax !== undefined
+          ? Number((profile.pitchMin + (profile.pitchMax - profile.pitchMin) * context.rng.next()).toFixed(2))
+          : 1,
+      });
+    }
+  }
 }
 
 function persistActiveState() {
@@ -2847,6 +3196,35 @@ function formatTickDuration(ticks) {
   return `${Math.max(0, Math.ceil(ticks / TICKS_PER_SECOND))}s`;
 }
 
+function formatNextDisasterText() {
+  const config = getRuntimeConfig();
+  if (!config.autoSchedule) {
+    return "disabled";
+  }
+  if (!getEnabledDisasterCount()) {
+    return "no disasters enabled";
+  }
+  if (runtimeState.active) {
+    return "after the active disaster";
+  }
+  if (!runtimeState.cooldownUntilTick) {
+    return "pending";
+  }
+  return formatTickDuration(Math.max(0, runtimeState.cooldownUntilTick - getCurrentTick()));
+}
+
+function buildDisasterStatusText() {
+  const config = getRuntimeConfig();
+  const enabledCount = getEnabledDisasterCount();
+  if (!runtimeState.active) {
+    return `No active disaster. Difficulty: ${getDifficultyLabel(config.difficulty)}. Auto schedule: ${config.autoSchedule ? "On" : "Off"}. Enabled: ${enabledCount}/${DISASTER_DEFINITIONS.length}. Next disaster: ${formatNextDisasterText()}. Recent: ${runtimeState.recentHistory.join(", ") || "none"}.`;
+  }
+
+  const definition = getDisasterDefinition(runtimeState.active.disasterId);
+  const remaining = Math.max(0, runtimeState.active.endTick - getCurrentTick());
+  return `Active: ${definition?.label || runtimeState.active.disasterId}. Remaining: ${formatTickDuration(remaining)}. Epicenter: ${formatLocationText(runtimeState.active.epicenter)}. Difficulty: ${getDifficultyLabel(config.difficulty)}. Auto schedule: ${config.autoSchedule ? "On" : "Off"}. Enabled: ${enabledCount}/${DISASTER_DEFINITIONS.length}. Next disaster: ${formatNextDisasterText()}.`;
+}
+
 function shuffleArray(values, rng) {
   const copy = values.slice();
   for (let index = copy.length - 1; index > 0; index -= 1) {
@@ -2866,13 +3244,32 @@ function queueDisasterMessage(message, targetEntityId) {
   queueMessage(`[Disasters] ${message}`, targetEntityId);
 }
 
-function getEligibleCandidates(participants) {
+function hasAdminTag(player) {
+  if (!player) {
+    return false;
+  }
+  try {
+    return player.hasTag(ADMIN_TAG);
+  } catch {
+    try {
+      return player.getTags().includes(ADMIN_TAG);
+    } catch {
+      return false;
+    }
+  }
+}
+
+function getEligibleCandidates(participants, options = {}) {
   const tick = getCurrentTick();
   const history = new Set(runtimeState.recentHistory);
   const playerOrder = shuffleArray(participants, createRng(hashString(`participants:${tick}`)));
   const candidates = [];
+  const respectConfig = options.respectConfig !== false;
 
   for (const definition of DISASTER_DEFINITIONS) {
+    if (respectConfig && !isDisasterEnabledForAuto(definition.id)) {
+      continue;
+    }
     if (history.has(definition.id)) {
       continue;
     }
@@ -2946,12 +3343,15 @@ function startDisaster(definition, candidate, options = {}) {
   });
 
   runtimeState.active = active;
+  clearNextScheduledDisaster(false);
   pushRecentHistory(definition.id);
   persistActiveState();
 
   const context = buildDisasterContext(active, definition);
   if (!context.dimension) {
-    clearPersistedState();
+    runtimeState.active = null;
+    scheduleNextRandomDisaster({ persist: false, retry: !!options.retrySchedule });
+    persistActiveState();
     return undefined;
   }
 
@@ -2960,6 +3360,7 @@ function startDisaster(definition, candidate, options = {}) {
   } catch {
     cleanupTempRefs(active);
     runtimeState.active = null;
+    scheduleNextRandomDisaster({ persist: false, retry: !!options.retrySchedule });
     persistActiveState();
     queueDisasterMessage(`${definition.label} failed to start cleanly and was aborted.`, options.targetEntityId);
     return undefined;
@@ -2990,7 +3391,7 @@ function finishActiveDisaster(reason = "ended", discardPendingBlocks = false, ta
   }
   cleanupTempRefs(active);
   runtimeState.active = null;
-  runtimeState.cooldownUntilTick = getCurrentTick() + GLOBAL_COOLDOWN_TICKS;
+  scheduleNextRandomDisaster({ persist: false });
   persistActiveState();
 
   const label = definition?.label || active.disasterId;
@@ -3032,6 +3433,8 @@ function tickActiveDisaster() {
     return;
   }
 
+  emitActiveDisasterFx(active, context);
+
   if (context.currentTick % 20 === 0) {
     persistActiveState();
   }
@@ -3062,31 +3465,59 @@ function resumeOrRecoverActiveDisaster() {
   queueDisasterMessage(`${definition.label} resumed near ${formatLocationText(active.epicenter)}.`);
 }
 
-function tryStartRandomDisaster() {
+function tryStartRandomDisaster(options = {}) {
   if (runtimeState.active) {
-    return;
+    if (options.notify) {
+      queueDisasterMessage("A disaster is already active. Cancel it first.", options.targetEntityId);
+    }
+    return { started: false, reason: "active" };
   }
-  if (getCurrentTick() < runtimeState.cooldownUntilTick) {
-    return;
+  if (options.requireScheduled && (!runtimeState.cooldownUntilTick || getCurrentTick() < runtimeState.cooldownUntilTick)) {
+    return { started: false, reason: "not_due" };
   }
 
   const participants = getParticipantPlayers();
   if (!participants.length) {
-    return;
+    if (options.retryOnFailure) {
+      scheduleNextRandomDisaster({ retry: true });
+    }
+    if (options.notify) {
+      queueDisasterMessage("No survival or adventure players are available to anchor a disaster.", options.targetEntityId);
+    }
+    return { started: false, reason: "no_participants" };
   }
 
-  const candidates = getEligibleCandidates(participants);
+  const candidates = getEligibleCandidates(participants, { respectConfig: options.respectConfig !== false });
   if (!candidates.length) {
-    return;
+    if (options.retryOnFailure) {
+      scheduleNextRandomDisaster({ retry: true });
+    }
+    if (options.notify) {
+      const message = getEnabledDisasterCount()
+        ? "No enabled disasters found a valid location right now."
+        : "No disasters are enabled for automatic scheduling.";
+      queueDisasterMessage(message, options.targetEntityId);
+    }
+    return { started: false, reason: "no_candidates" };
   }
 
   const picker = createRng(hashString(`disaster-pick:${getCurrentTick()}`));
   const candidate = pickWeightedCandidate(candidates, picker);
   if (!candidate) {
-    return;
+    if (options.retryOnFailure) {
+      scheduleNextRandomDisaster({ retry: true });
+    }
+    return { started: false, reason: "pick_failed" };
   }
 
-  startDisaster(candidate.definition, candidate);
+  const active = startDisaster(candidate.definition, candidate, {
+    targetEntityId: options.targetEntityId,
+    retrySchedule: !!options.retryOnFailure,
+  });
+  if (!active && options.retryOnFailure) {
+    scheduleNextRandomDisaster({ retry: true });
+  }
+  return { started: !!active, reason: active ? "started" : "failed" };
 }
 
 function permissionIsElevated(value) {
@@ -3126,19 +3557,43 @@ function isAuthorizedDebugEvent(event) {
 }
 
 function reportDisasterStatus(targetEntityId) {
-  if (!runtimeState.active) {
-    queueDisasterMessage(
-      `No active disaster. Cooldown: ${formatTickDuration(Math.max(0, runtimeState.cooldownUntilTick - getCurrentTick()))}. Recent: ${runtimeState.recentHistory.join(", ") || "none"}.`,
-      targetEntityId
-    );
-    return;
+  queueDisasterMessage(buildDisasterStatusText(), targetEntityId);
+}
+
+function triggerSpecificDisaster(definition, anchor, options = {}) {
+  const targetEntityId = options.targetEntityId;
+  if (!definition) {
+    queueDisasterMessage(`Unknown disaster id "${options.disasterId || ""}".`, targetEntityId);
+    return false;
+  }
+  if (runtimeState.active) {
+    queueDisasterMessage("A disaster is already active. Cancel it first.", targetEntityId);
+    return false;
+  }
+  if (!anchor) {
+    queueDisasterMessage("No valid player anchor is available.", targetEntityId);
+    return false;
   }
 
-  const definition = getDisasterDefinition(runtimeState.active.disasterId);
-  const remaining = Math.max(0, runtimeState.active.endTick - getCurrentTick());
-  queueDisasterMessage(
-    `Active: ${definition?.label || runtimeState.active.disasterId}. Remaining: ${formatTickDuration(remaining)}. Epicenter: ${formatLocationText(runtimeState.active.epicenter)}. Cooldown: ${formatTickDuration(Math.max(0, runtimeState.cooldownUntilTick - getCurrentTick()))}.`,
-    targetEntityId
+  const tick = getCurrentTick();
+  const seed = hashString(`forced:${definition.id}:${anchor.id || anchor.name}:${tick}`);
+  const epicenter = definition.selectEpicenter(anchor, { currentTick: tick, rng: createRng(seed), forced: true });
+  if (!epicenter) {
+    queueDisasterMessage(`No valid epicenter was found for ${definition.label} near the anchor.`, targetEntityId);
+    return false;
+  }
+
+  return !!startDisaster(
+    definition,
+    {
+      definition,
+      anchor,
+      epicenter: floorLocation(epicenter),
+      seed,
+      terrainTags: getTerrainTags(anchor.dimension, epicenter),
+      slopeVector: estimateSlopeDirection(anchor.dimension, epicenter),
+    },
+    { forced: true, targetEntityId }
   );
 }
 
@@ -3158,34 +3613,260 @@ function handleTriggerCommand(event) {
 
   const participants = getParticipantPlayers();
   const anchor = event?.sourceEntity?.typeId === "minecraft:player" ? event.sourceEntity : participants[0];
-  if (!anchor) {
-    queueDisasterMessage("No valid player anchor is available.", targetEntityId);
-    return;
-  }
+  triggerSpecificDisaster(definition, anchor, { disasterId, targetEntityId });
+}
 
+async function showFormSafe(form, player) {
+  try {
+    return await form.show(player);
+  } catch {
+    queueDisasterMessage("The disaster admin UI could not be opened right now.", player?.id);
+    return { canceled: true, cancelationReason: "error" };
+  }
+}
+
+function canOpenAdminClockMenu(player, itemTypeId) {
+  if (!player || player.typeId !== "minecraft:player" || itemTypeId !== CLOCK_ITEM_ID || !hasAdminTag(player)) {
+    return false;
+  }
+  const playerId = player.id || player.name;
+  if (!playerId || adminFormState.openPlayers.has(playerId)) {
+    return false;
+  }
   const tick = getCurrentTick();
-  const seed = hashString(`forced:${definition.id}:${anchor.id || anchor.name}:${tick}`);
-  const epicenter = definition.selectEpicenter(anchor, { currentTick: tick, rng: createRng(seed), forced: true });
-  if (!epicenter) {
-    queueDisasterMessage(`No valid epicenter was found for ${definition.label} near the anchor.`, targetEntityId);
+  const debounceUntil = adminFormState.useDebounceUntil.get(playerId) || 0;
+  if (tick < debounceUntil) {
+    return false;
+  }
+  adminFormState.useDebounceUntil.set(playerId, tick + ADMIN_FORM_DEBOUNCE_TICKS);
+  return true;
+}
+
+async function showAdminMainMenu(player) {
+  const config = getRuntimeConfig();
+  const activeDefinition = getDisasterDefinition(runtimeState.active?.disasterId);
+  const body = [
+    `Difficulty: ${getDifficultyLabel(config.difficulty)}`,
+    `Auto Schedule: ${config.autoSchedule ? "On" : "Off"}`,
+    `Enabled Disasters: ${getEnabledDisasterCount()}/${DISASTER_DEFINITIONS.length}`,
+    `Active Disaster: ${activeDefinition?.label || "None"}`,
+    `Next Disaster: ${formatNextDisasterText()}`,
+  ].join("\n");
+
+  const response = await showFormSafe(
+    new ActionFormData()
+      .title("Disaster Admin")
+      .body(body)
+      .button("Scheduler Settings")
+      .button("Disaster Toggles")
+      .button("Manual Controls")
+      .button("Close"),
+    player
+  );
+
+  if (response.canceled) {
+    return null;
+  }
+
+  switch (response.selection) {
+    case 0:
+      return "scheduler";
+    case 1:
+      return "toggles";
+    case 2:
+      return "manual";
+    default:
+      return null;
+  }
+}
+
+async function showSchedulerSettingsMenu(player) {
+  const config = getRuntimeConfig();
+  const response = await showFormSafe(
+    new ModalFormData()
+      .title("Scheduler Settings")
+      .dropdown("Difficulty", DIFFICULTY_IDS.map((id) => DIFFICULTY_SETTINGS[id].label), Math.max(0, DIFFICULTY_IDS.indexOf(config.difficulty)))
+      .toggle("Auto schedule", config.autoSchedule),
+    player
+  );
+
+  if (response.canceled) {
+    return "main";
+  }
+
+  const formValues = Array.isArray(response.formValues) ? response.formValues : [];
+  const difficultyIndex = Number(formValues[0] ?? 0);
+  const difficulty = DIFFICULTY_IDS[difficultyIndex] || config.difficulty;
+  const autoSchedule = !!formValues[1];
+  applyDisasterConfig({
+    ...config,
+    difficulty,
+    autoSchedule,
+  });
+  queueDisasterMessage(
+    `Scheduler updated. Difficulty: ${getDifficultyLabel(difficulty)}. Auto schedule: ${autoSchedule ? "On" : "Off"}. Next disaster: ${formatNextDisasterText()}.`,
+    player.id
+  );
+  return "main";
+}
+
+async function showDisasterToggleMenu(player) {
+  const config = getRuntimeConfig();
+  const form = new ModalFormData().title("Disaster Toggles");
+  for (const definition of DISASTER_DEFINITIONS) {
+    form.toggle(`${definition.label} (${definition.tier})`, config.enabledDisasters[definition.id] !== false);
+  }
+
+  const response = await showFormSafe(form, player);
+  if (response.canceled) {
+    return "main";
+  }
+
+  const formValues = Array.isArray(response.formValues) ? response.formValues : [];
+  const enabledDisasters = {};
+  DISASTER_DEFINITIONS.forEach((definition, index) => {
+    enabledDisasters[definition.id] = formValues[index] !== false;
+  });
+  applyDisasterConfig({
+    ...config,
+    enabledDisasters,
+  });
+  queueDisasterMessage(
+    `Disaster rotation updated. Enabled: ${getEnabledDisasterCount()}/${DISASTER_DEFINITIONS.length}. Next disaster: ${formatNextDisasterText()}.`,
+    player.id
+  );
+  return "main";
+}
+
+async function confirmCancelActiveDisaster(player) {
+  if (!runtimeState.active) {
+    queueDisasterMessage("No active disaster to cancel.", player.id);
+    return;
+  }
+  const response = await showFormSafe(
+    new MessageFormData()
+      .title("Cancel Disaster")
+      .body("Cancel the active disaster now?")
+      .button1("Keep Running")
+      .button2("Cancel Disaster"),
+    player
+  );
+
+  if (response.canceled) {
     return;
   }
 
-  startDisaster(
-    definition,
-    {
-      definition,
-      anchor,
-      epicenter: floorLocation(epicenter),
-      seed,
-      terrainTags: getTerrainTags(anchor.dimension, epicenter),
-      slopeVector: estimateSlopeDirection(anchor.dimension, epicenter),
-    },
-    { forced: true, targetEntityId }
+  if (response.selection === 1 || response.selection === true) {
+    cancelActiveDisaster(player.id);
+  }
+}
+
+async function showSpecificDisasterTriggerMenu(player) {
+  const form = new ActionFormData()
+    .title("Trigger Specific Disaster")
+    .body("Select a disaster to force near your current position.");
+  for (const definition of DISASTER_DEFINITIONS) {
+    const autoState = isDisasterEnabledForAuto(definition.id) ? "" : " [auto off]";
+    form.button(`${definition.label}${autoState}`);
+  }
+
+  const response = await showFormSafe(form, player);
+  if (response.canceled) {
+    return "manual";
+  }
+
+  const definition = DISASTER_DEFINITIONS[Number(response.selection)];
+  if (definition) {
+    triggerSpecificDisaster(definition, player, { disasterId: definition.id, targetEntityId: player.id });
+  }
+  return "manual";
+}
+
+async function showManualControlsMenu(player) {
+  const response = await showFormSafe(
+    new ActionFormData()
+      .title("Manual Controls")
+      .body(buildDisasterStatusText())
+      .button("Start Random Now")
+      .button("Trigger Specific Disaster")
+      .button("Cancel Active Disaster")
+      .button("Show Status")
+      .button("Back"),
+    player
   );
+
+  if (response.canceled) {
+    return "main";
+  }
+
+  switch (response.selection) {
+    case 0:
+      tryStartRandomDisaster({ notify: true, targetEntityId: player.id });
+      return "manual";
+    case 1:
+      return "trigger";
+    case 2:
+      await confirmCancelActiveDisaster(player);
+      return "manual";
+    case 3:
+      reportDisasterStatus(player.id);
+      return "manual";
+    default:
+      return "main";
+  }
+}
+
+async function openAdminClockMenu(player) {
+  const playerId = player?.id || player?.name;
+  if (!playerId || adminFormState.openPlayers.has(playerId)) {
+    return;
+  }
+
+  adminFormState.openPlayers.add(playerId);
+  try {
+    let view = "main";
+    while (view) {
+      if (!hasAdminTag(player)) {
+        break;
+      }
+      switch (view) {
+        case "scheduler":
+          view = await showSchedulerSettingsMenu(player);
+          break;
+        case "toggles":
+          view = await showDisasterToggleMenu(player);
+          break;
+        case "manual":
+          view = await showManualControlsMenu(player);
+          break;
+        case "trigger":
+          view = await showSpecificDisasterTriggerMenu(player);
+          break;
+        case "main":
+        default:
+          view = await showAdminMainMenu(player);
+          break;
+      }
+    }
+  } finally {
+    adminFormState.openPlayers.delete(playerId);
+  }
+}
+
+function handleAdminClockUse(event) {
+  initializeRuntime();
+  const player = event?.source || event?.sourceEntity;
+  const itemTypeId = event?.itemStack?.typeId || event?.item?.typeId;
+  if (!canOpenAdminClockMenu(player, itemTypeId)) {
+    return;
+  }
+  system.run(() => {
+    openAdminClockMenu(player);
+  });
 }
 
 function handleScriptEvent(event) {
+  initializeRuntime();
   if (!String(event?.id || "").startsWith("disasters:")) {
     return;
   }
@@ -3216,13 +3897,20 @@ function initializeRuntime() {
   initialized = true;
   restoreRuntimeState();
   resumeOrRecoverActiveDisaster();
+  ensureScheduledDisasterTick();
+  persistActiveState();
 
   system.runInterval(() => {
     processBlockQueue();
     if (runtimeState.active) {
       tickActiveDisaster();
-    } else if (getCurrentTick() % SCHEDULER_INTERVAL === 0) {
-      tryStartRandomDisaster();
+    } else if (
+      getCurrentTick() % SCHEDULER_INTERVAL === 0
+      && getRuntimeConfig().autoSchedule
+      && runtimeState.cooldownUntilTick
+      && getCurrentTick() >= runtimeState.cooldownUntilTick
+    ) {
+      tryStartRandomDisaster({ requireScheduled: true, retryOnFailure: true });
     }
     flushPendingMessages();
   }, 1);
@@ -3242,6 +3930,14 @@ try {
   });
 } catch {
   // Ignore missing script event support in older runtimes.
+}
+
+try {
+  world.afterEvents.itemUse.subscribe((event) => {
+    handleAdminClockUse(event);
+  });
+} catch {
+  // Ignore missing item use support in older runtimes.
 }
 
 system.runTimeout(() => {
