@@ -1,11 +1,11 @@
-﻿{
-  "format_version": "1.20.30",
+{
+  "format_version": "1.26.0",
   "minecraft:item": {
     "description": {
       "identifier": "wondercraft:gold_ingot_8k",
       "menu_category": {
         "category": "items",
-        "group": "itemGroup.name.products"
+        "group": "minecraft:itemGroup.name.products"
       }
     },
     "components": {
