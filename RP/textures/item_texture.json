@@ -1,0 +1,29 @@
+{
+  "resource_pack_name": "WonderCraft Resource Pack",
+  "texture_data": {
+    "wondercraft:aluminum_dust": {
+      "textures": "textures/items/aluminum_dust"
+    },
+    "wondercraft:copper_dust": {
+      "textures": "textures/items/copper_dust"
+    },
+    "wondercraft:gold_dust": {
+      "textures": "textures/items/gold_dust"
+    },
+    "wondercraft:iron_dust": {
+      "textures": "textures/items/iron_dust"
+    },
+    "wondercraft:lead_dust": {
+      "textures": "textures/items/lead_dust"
+    },
+    "wondercraft:silver_dust": {
+      "textures": "textures/items/silver_dust"
+    },
+    "wondercraft:tin_dust": {
+      "textures": "textures/items/tin_dust"
+    },
+    "wondercraft:zinc_dust": {
+      "textures": "textures/items/zinc_dust"
+    }
+  }
+}
