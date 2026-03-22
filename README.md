@@ -26,7 +26,7 @@ DUST
 * tin_dust
 * zinc_dust
 
-INGOTS
+INGOTS (needs recipe)
 ------
 
 * aluminum_brass_ingot
