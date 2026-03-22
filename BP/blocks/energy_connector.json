@@ -1,0 +1,58 @@
+{
+  "format_version": "1.21.80",
+  "minecraft:block": {
+    "description": {
+      "identifier": "wondercraft:energy_connector",
+      "menu_category": {
+        "category": "construction"
+      }
+    },
+    "components": {
+      "minecraft:geometry": {
+        "identifier": "geometry.energy_connector"
+      },
+      "minecraft:material_instances": {
+        "*": {
+          "texture": "energy_connector",
+          "render_method": "opaque"
+        }
+      },
+      "minecraft:item_visual": {
+        "geometry": {
+          "identifier": "geometry.energy_connector"
+        },
+        "material_instances": {
+          "*": {
+            "texture": "energy_connector",
+            "render_method": "opaque"
+          }
+        }
+      },
+      "minecraft:selection_box": {
+        "origin": [
+          -6,
+          2,
+          -6
+        ],
+        "size": [
+          12,
+          12,
+          12
+        ]
+      },
+      "minecraft:collision_box": {
+        "origin": [
+          -6,
+          2,
+          -6
+        ],
+        "size": [
+          12,
+          12,
+          12
+        ]
+      },
+      "minecraft:loot": "loot_tables/blocks/energy_connector.json"
+    }
+  }
+}

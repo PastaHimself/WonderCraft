@@ -1,0 +1,19 @@
+{
+  "format_version": "1.20.50",
+  "minecraft:block": {
+    "description": {
+      "identifier": "wondercraft:quantum_solar_panel"
+    },
+    "pools": [
+      {
+        "rolls": 1,
+        "entries": [
+          {
+            "type": "item",
+            "name": "wondercraft:quantum_solar_panel"
+          }
+        ]
+      }
+    ]
+  }
+}

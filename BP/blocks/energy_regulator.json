@@ -1,0 +1,58 @@
+{
+  "format_version": "1.21.80",
+  "minecraft:block": {
+    "description": {
+      "identifier": "wondercraft:energy_regulator",
+      "menu_category": {
+        "category": "construction"
+      }
+    },
+    "components": {
+      "minecraft:geometry": {
+        "identifier": "geometry.energy_regulator"
+      },
+      "minecraft:material_instances": {
+        "*": {
+          "texture": "energy_regulator",
+          "render_method": "opaque"
+        }
+      },
+      "minecraft:item_visual": {
+        "geometry": {
+          "identifier": "geometry.energy_regulator"
+        },
+        "material_instances": {
+          "*": {
+            "texture": "energy_regulator",
+            "render_method": "opaque"
+          }
+        }
+      },
+      "minecraft:selection_box": {
+        "origin": [
+          -5,
+          3,
+          -5
+        ],
+        "size": [
+          10,
+          10,
+          10
+        ]
+      },
+      "minecraft:collision_box": {
+        "origin": [
+          -5,
+          3,
+          -5
+        ],
+        "size": [
+          10,
+          10,
+          10
+        ]
+      },
+      "minecraft:loot": "loot_tables/blocks/energy_regulator.json"
+    }
+  }
+}

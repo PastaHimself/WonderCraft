@@ -4,8 +4,71 @@
   "padding": 8,
   "num_mip_levels": 4,
   "texture_data": {
+    "advanced_solar_panel_bottom": {
+      "textures": "textures/blocks/advanced_solar_panel_bottom"
+    },
+    "advanced_solar_panel_side": {
+      "textures": "textures/blocks/advanced_solar_panel_side"
+    },
+    "advanced_solar_panel_top": {
+      "textures": "textures/blocks/advanced_solar_panel_top"
+    },
+    "basic_solar_panel_bottom": {
+      "textures": "textures/blocks/basic_solar_panel_bottom"
+    },
+    "basic_solar_panel_side": {
+      "textures": "textures/blocks/basic_solar_panel_side"
+    },
+    "basic_solar_panel_top": {
+      "textures": "textures/blocks/basic_solar_panel_top"
+    },
+    "elite_solar_panel_bottom": {
+      "textures": "textures/blocks/elite_solar_panel_bottom"
+    },
+    "elite_solar_panel_side": {
+      "textures": "textures/blocks/elite_solar_panel_side"
+    },
+    "elite_solar_panel_top": {
+      "textures": "textures/blocks/elite_solar_panel_top"
+    },
+    "energy_connector": {
+      "textures": "textures/blocks/energy_connector"
+    },
+    "energy_regulator": {
+      "textures": "textures/blocks/energy_regulator"
+    },
+    "industrial_solar_panel_bottom": {
+      "textures": "textures/blocks/industrial_solar_panel_bottom"
+    },
+    "industrial_solar_panel_side": {
+      "textures": "textures/blocks/industrial_solar_panel_side"
+    },
+    "industrial_solar_panel_top": {
+      "textures": "textures/blocks/industrial_solar_panel_top"
+    },
+    "quantum_solar_panel_bottom": {
+      "textures": "textures/blocks/quantum_solar_panel_bottom"
+    },
+    "quantum_solar_panel_side": {
+      "textures": "textures/blocks/quantum_solar_panel_side"
+    },
+    "quantum_solar_panel_top": {
+      "textures": "textures/blocks/quantum_solar_panel_top"
+    },
+    "reinforced_solar_panel_bottom": {
+      "textures": "textures/blocks/reinforced_solar_panel_bottom"
+    },
+    "reinforced_solar_panel_side": {
+      "textures": "textures/blocks/reinforced_solar_panel_side"
+    },
+    "reinforced_solar_panel_top": {
+      "textures": "textures/blocks/reinforced_solar_panel_top"
+    },
     "ore_washer": {
       "textures": "textures/blocks/ore_washer"
+    },
+    "traye_black_bg": {
+      "textures": "textures/models/black_bg"
     }
   }
 }

@@ -1,6 +1,30 @@
 {
   "format_version": "1.1.0",
+  "wondercraft:advanced_solar_panel": {
+    "sound": "metal"
+  },
+  "wondercraft:basic_solar_panel": {
+    "sound": "metal"
+  },
+  "wondercraft:elite_solar_panel": {
+    "sound": "metal"
+  },
+  "wondercraft:energy_connector": {
+    "sound": "metal"
+  },
+  "wondercraft:energy_regulator": {
+    "sound": "metal"
+  },
+  "wondercraft:industrial_solar_panel": {
+    "sound": "metal"
+  },
   "wondercraft:ore_washer": {
     "sound": "stone"
+  },
+  "wondercraft:quantum_solar_panel": {
+    "sound": "metal"
+  },
+  "wondercraft:reinforced_solar_panel": {
+    "sound": "metal"
   }
 }

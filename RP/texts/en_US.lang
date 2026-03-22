@@ -1,0 +1,9 @@
+tile.wondercraft:ore_washer.name=Ore Washer
+tile.wondercraft:basic_solar_panel.name=Basic Solar Panel
+tile.wondercraft:advanced_solar_panel.name=Advanced Solar Panel
+tile.wondercraft:reinforced_solar_panel.name=Reinforced Solar Panel
+tile.wondercraft:industrial_solar_panel.name=Industrial Solar Panel
+tile.wondercraft:elite_solar_panel.name=Elite Solar Panel
+tile.wondercraft:quantum_solar_panel.name=Quantum Solar Panel
+tile.wondercraft:energy_connector.name=Energy Connector
+tile.wondercraft:energy_regulator.name=Energy Regulator
