@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "checkJs": true,
+    "module": "es2022",
+    "moduleResolution": "node",
+    "target": "es2022",
+    "baseUrl": ".",
+    "paths": {
+      "@minecraft/*": [".vscode/node_modules/@minecraft/*"]
+    }
+  },
+  "include": ["BP/scripts/**/*.js", "BP/scripts/**/*.d.ts"]
+}
