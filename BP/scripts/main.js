@@ -455,10 +455,11 @@ async function openOreWasherMenu(player, block) {
 }
 
 function buildOreWasherForm(node, state) {
-  const form = new ChestFormData("9");
+  const form = new ChestFormData(2);
   const progressText =
     state.activeOutputSlot === null ? "Idle" : `${state.progress}/${ORE_WASHER_CYCLE_TICKS}`;
   const powerText = `Power: ${ORE_WASHER_WATTS} W/s`;
+  const storedDust = state.outputs.reduce((sum, count) => sum + count, 0);
   const inputLore = [
     `Cobblestone: ${state.input}/${ORE_WASHER_INPUT_CAPACITY}`,
     `Cycle: ${progressText}`,
@@ -477,27 +478,17 @@ function buildOreWasherForm(node, state) {
     state.activeOutputSlot === null && state.input > 0,
   );
 
-  for (let index = 0; index < ORE_WASHER_OUTPUTS.length; index++) {
-    const slot = index + 1;
-    const itemType = ORE_WASHER_OUTPUTS[index];
-    const count = state.outputs[index] ?? 0;
-    const isActive = state.activeOutputSlot === slot;
-    const lore = [
-      `Stored: ${count}/${ORE_WASHER_OUTPUT_CAPACITY}`,
+  form.button(
+    1,
+    "Random Dust",
+    [
+      `Stored: ${storedDust}/${ORE_WASHER_OUTPUT_CAPACITY}`,
       `Cycle: ${progressText}`,
-      isActive ? "Selected for the current wash cycle." : "Click to collect this dust type.",
-    ];
-
-    form.button(
-      slot,
-      getReadableName(itemType),
-      lore,
-      itemType,
-      Math.max(0, Math.min(count, 99)),
-      0,
-      isActive,
-    );
-  }
+      "Click to collect one random dust type.",
+    ],
+    "minecraft:glowstone_dust",
+    Math.max(0, Math.min(storedDust, 99)),
+  );
 
   return form;
 }
@@ -507,8 +498,8 @@ function handleWasherMenuSelection(player, node, state, selection) {
     return insertSelectedCobblestone(player, state);
   }
 
-  if (selection >= 1 && selection <= ORE_WASHER_OUTPUTS.length) {
-    return withdrawWasherOutputToPlayer(player, state, selection - 1);
+  if (selection === 1) {
+    return withdrawRandomWasherOutputToPlayer(player, state);
   }
 
   return false;
@@ -533,9 +524,10 @@ function insertSelectedCobblestone(player, state) {
 
   const moved = Math.min(item.amount, room);
   state.input += moved;
-  item.amount -= moved;
+  const newAmount = item.amount - moved;
 
-  if (item.amount > 0) {
+  if (newAmount > 0) {
+    item.amount = newAmount;
     slot.setItem(item);
   } else {
     slot.setItem(undefined);
@@ -563,6 +555,22 @@ function withdrawWasherOutputToPlayer(player, state, outputIndex) {
 
   state.outputs[outputIndex] -= moved;
   return true;
+}
+
+function withdrawRandomWasherOutputToPlayer(player, state) {
+  const availableOutputs = [];
+  for (let index = 0; index < ORE_WASHER_OUTPUTS.length; index++) {
+    if ((state.outputs[index] ?? 0) > 0) {
+      availableOutputs.push(index);
+    }
+  }
+
+  if (availableOutputs.length === 0) {
+    return false;
+  }
+
+  const outputIndex = availableOutputs[Math.floor(Math.random() * availableOutputs.length)];
+  return withdrawWasherOutputToPlayer(player, state, outputIndex);
 }
 
 function syncWasherHoppers(node, state) {
@@ -737,6 +745,10 @@ function insertItemsIntoContainer(container, itemType, amount) {
 }
 
 function removeItemsFromContainer(container, itemType, amount) {
+  if (amount <= 0) {
+    return 0;
+  }
+
   let remaining = amount;
 
   for (let slotIndex = 0; slotIndex < container.size && remaining > 0; slotIndex++) {
@@ -747,10 +759,11 @@ function removeItemsFromContainer(container, itemType, amount) {
     }
 
     const moved = Math.min(existing.amount, remaining);
-    existing.amount -= moved;
+    const newAmount = existing.amount - moved;
     remaining -= moved;
 
-    if (existing.amount > 0) {
+    if (newAmount > 0) {
+      existing.amount = newAmount;
       slot.setItem(existing);
     } else {
       slot.setItem(undefined);

@@ -5,7 +5,7 @@ declare class ChestFormData {
 	/**
 	 * @param size The size of the chest to display as.
 	 */
-	constructor(size?: 'small' | 'single' | 'large' | 'double' | '5' | '9' | '18' | '27' | '36' | '45' | '54');
+	constructor(size?: 'small' | 'single' | 'large' | 'double' | '1' | '2' | '5' | '9' | '18' | '27' | '36' | '45' | '54' | 1 | 2 | 5 | 9 | 18 | 27 | 36 | 45 | 54);
 	/**
 	 * @remarks The number of slots in the chest ui.
 	 */
