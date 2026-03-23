@@ -1,30 +1,30 @@
 ﻿{
-  "format_version": 3,
+  "format_version": 2,
   "header": {
     "name": "WonderCraf0t BP 0.1",
     "description": "WonderCraft BP 0.1",
     "uuid": "cb871f4d-7bf3-4270-ba7a-b638eee86ae6",
-    "version": "1.0.0",
-    "min_engine_version": "1.26.0"
+    "version": [1, 0, 0],
+    "min_engine_version": [1, 26, 0]
   },
   "modules": [
     {
       "type": "data",
       "uuid": "4a652fb8-31ca-47bc-a494-aad814f7427d",
-      "version": "1.0.0"
+      "version": [1, 0, 0]
     },
     {
       "type": "script",
       "language": "javascript",
       "entry": "scripts/main.js",
       "uuid": "01c69c58-5799-4e00-b336-64731bc873fa",
-      "version": "1.0.0"
+      "version": [1, 0, 0]
     }
   ],
   "dependencies": [
     {
       "uuid": "2b01c8fa-9fb9-4fa0-aa0f-9a168cd48638",
-      "version": "1.0.0"
+      "version": [1, 0, 0]
     },
     {
       "module_name": "@minecraft/server",

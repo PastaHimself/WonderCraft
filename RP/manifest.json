@@ -1,17 +1,17 @@
 ﻿{
-  "format_version": 3,
+  "format_version": 2,
   "header": {
     "name": "WonderCraft RP 0.1",
-    "description": "WonderCraft BP 0.1",
+    "description": "WonderCraft RP 0.1",
     "uuid": "2b01c8fa-9fb9-4fa0-aa0f-9a168cd48638",
-    "version": "1.0.0",
-    "min_engine_version": "1.26.0"
+    "version": [1, 0, 0],
+    "min_engine_version": [1, 26, 0]
   },
   "modules": [
     {
       "type": "resources",
       "uuid": "700e8f15-2fb8-47aa-ac49-a1af36ccd005",
-      "version": "1.0.0"
+      "version": [1, 0, 0]
     }
   ],
   "dependencies": [],
