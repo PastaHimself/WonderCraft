@@ -486,7 +486,7 @@ function buildOreWasherForm(node, state) {
       `Cycle: ${progressText}`,
       "Click to collect one random dust type.",
     ],
-    "minecraft:glowstone_dust",
+    ORE_WASHER_OUTPUTS[0],
     Math.max(0, Math.min(storedDust, 99)),
   );
 

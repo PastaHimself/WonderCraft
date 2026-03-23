@@ -158,6 +158,16 @@
                 }
             },
             {
+                "02@chest_ui.chest_ui_template": {
+                    "$grid_size": [
+                        2,
+                        1
+                    ],
+                    "$condition": "񖶆",
+                    "ignored": "$disable_2_slots_layout"
+                }
+            },
+            {
                 "05@chest_ui.chest_ui_template": {
                     "$grid_size": [
                         5,
