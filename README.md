@@ -18,7 +18,7 @@ Energy components
 * Energy Regulator: distributes energy to connected systems.
 * Energy Connector: transfers energy between blocks.
 
-ITEMS
+ITEMS:
 ========
 
 DUST
