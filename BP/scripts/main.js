@@ -366,7 +366,7 @@ function refreshOreWasher(node) {
       return;
     }
 
-    if (!consumeEnergyForBlock(node, ORE_WASHER_WATTS)) {
+    if (!consumeEnergyForBlock(block, ORE_WASHER_WATTS)) {
       if (state.progress !== 0) {
         state.progress = 0;
         stateDirty = true;
@@ -781,12 +781,19 @@ function getReadableName(typeId) {
     .replace(/(^\w|\s\w)/g, (match) => match.toUpperCase());
 }
 
-function consumeEnergyForBlock(block, watts) {
-  const location = floorLocation(block.location);
-  const key = makeNodeKey(block.dimension.id, location);
+function consumeEnergyForBlock(target, watts) {
+  let node;
 
-  registerEnergyNode(block);
-  const node = trackedNodes.get(key);
+  if (target?.dimension?.id && target?.location) {
+    const location = floorLocation(target.location);
+    const key = makeNodeKey(target.dimension.id, location);
+    registerEnergyNode(target);
+    node = trackedNodes.get(key);
+  } else if (target?.dimensionId && target?.location) {
+    const key = makeNodeKey(target.dimensionId, target.location);
+    node = trackedNodes.get(key) ?? target;
+  }
+
   if (!node) {
     return false;
   }
