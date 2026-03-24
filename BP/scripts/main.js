@@ -39,7 +39,7 @@ const NON_STORAGE_ENERGY_NODE_DEFS = {
     rate: 10,
     maxInput: 0,
     maxOutput: 10,
-    capacity: 0,
+    capacity: 25,
     canGenerate: true,
   },
   "wondercraft:advanced_solar_panel": {
@@ -47,7 +47,7 @@ const NON_STORAGE_ENERGY_NODE_DEFS = {
     rate: 25,
     maxInput: 0,
     maxOutput: 25,
-    capacity: 0,
+    capacity: 100,
     canGenerate: true,
   },
   "wondercraft:reinforced_solar_panel": {
@@ -55,7 +55,7 @@ const NON_STORAGE_ENERGY_NODE_DEFS = {
     rate: 60,
     maxInput: 0,
     maxOutput: 60,
-    capacity: 0,
+    capacity: 400,
     canGenerate: true,
   },
   "wondercraft:industrial_solar_panel": {
@@ -63,7 +63,7 @@ const NON_STORAGE_ENERGY_NODE_DEFS = {
     rate: 150,
     maxInput: 0,
     maxOutput: 150,
-    capacity: 0,
+    capacity: 1600,
     canGenerate: true,
   },
   "wondercraft:elite_solar_panel": {
@@ -71,7 +71,7 @@ const NON_STORAGE_ENERGY_NODE_DEFS = {
     rate: 400,
     maxInput: 0,
     maxOutput: 400,
-    capacity: 0,
+    capacity: 6400,
     canGenerate: true,
   },
   "wondercraft:quantum_solar_panel": {
@@ -79,7 +79,7 @@ const NON_STORAGE_ENERGY_NODE_DEFS = {
     rate: 1000,
     maxInput: 0,
     maxOutput: 1000,
-    capacity: 0,
+    capacity: 25600,
     canGenerate: true,
   },
   "wondercraft:energy_connector": {
@@ -112,6 +112,7 @@ const DIRECTIONS = [
 ];
 
 const trackedNodes = new Map();
+const generatorCharge = new Map();
 const storageCharge = new Map();
 const washerStates = new Map();
 const washerCooldowns = new Map();
@@ -225,6 +226,7 @@ function pruneTrackedNodes() {
     }
 
     if (node.descriptor.kind === "generator") {
+      generatorCharge.delete(key);
       removeHologramForNode(node);
     }
   }
@@ -283,6 +285,8 @@ function applyEnergyNetwork(nodes) {
     removeHologramForNode(generator);
   }
 
+  chargeGenerators(generators);
+
   if (generators.length === 0) {
     syncStorageDisplays(storages);
     return;
@@ -294,7 +298,7 @@ function applyEnergyNetwork(nodes) {
 
   const availableByPanel = generators.map((generator) => ({
     key: generator.key,
-    watts: getSolarProduction(generator),
+    watts: getGeneratorAvailableOutput(generator),
     node: generator,
   }));
 
@@ -324,6 +328,7 @@ function applyEnergyNetwork(nodes) {
     stateDirty = true;
   }
 
+  drainGeneratorCharge(availableByPanel, acceptedTotal);
   syncStorageDisplays(storages);
 }
 
@@ -1063,6 +1068,49 @@ function getSolarProduction(node) {
   return Math.floor(node.descriptor.rate * getWeatherMultiplier(dimension));
 }
 
+function chargeGenerators(generators) {
+  for (const generator of generators) {
+    const produced = getSolarProduction(generator);
+    if (produced <= 0) {
+      continue;
+    }
+
+    const current = generatorCharge.get(generator.key) ?? 0;
+    const next = Math.min(generator.descriptor.capacity, current + produced);
+    if (next === current) {
+      continue;
+    }
+
+    generatorCharge.set(generator.key, next);
+    stateDirty = true;
+  }
+}
+
+function getGeneratorAvailableOutput(generator) {
+  const current = generatorCharge.get(generator.key) ?? 0;
+  return Math.min(current, generator.descriptor.maxOutput);
+}
+
+function drainGeneratorCharge(availableByPanel, acceptedTotal) {
+  let remaining = acceptedTotal;
+
+  for (const panel of availableByPanel) {
+    if (remaining <= 0) {
+      break;
+    }
+
+    const used = Math.min(panel.watts, remaining);
+    if (used <= 0) {
+      continue;
+    }
+
+    const current = generatorCharge.get(panel.key) ?? 0;
+    generatorCharge.set(panel.key, Math.max(current - used, 0));
+    remaining -= used;
+    stateDirty = true;
+  }
+}
+
 function syncStorageDisplays(storages) {
   const totalStored = storages.reduce((sum, storage) => {
     return sum + (storageCharge.get(storage.key) ?? 0);
@@ -1225,6 +1273,11 @@ function registerEnergyNode(block) {
   if (descriptor.kind === "storage") {
     stateDirty = ensureStorageCharge(storageCharge, key) || stateDirty;
   }
+
+  if (descriptor.kind === "generator" && !generatorCharge.has(key)) {
+    generatorCharge.set(key, 0);
+    stateDirty = true;
+  }
 }
 
 function hasOpenSky(dimension, block, aboveLocation) {
@@ -1286,9 +1339,15 @@ function loadEnergyState() {
 
     const parsed = loadStorageChargeState(rawState, storageCharge);
     if (!parsed) {
+      generatorCharge.clear();
       storageCharge.clear();
       washerStates.clear();
       return;
+    }
+
+    const savedGenerators = parsed.generators ?? {};
+    for (const [key, charge] of Object.entries(savedGenerators)) {
+      generatorCharge.set(key, Math.max(Number(charge) || 0, 0));
     }
 
     const savedWashers = parsed.washers ?? {};
@@ -1296,6 +1355,7 @@ function loadEnergyState() {
       washerStates.set(key, normalizeWasherState(washerState));
     }
   } catch {
+    generatorCharge.clear();
     storageCharge.clear();
     washerStates.clear();
   }
@@ -1311,7 +1371,10 @@ function saveEnergyStateIfDirty() {
     washers[key] = serializeWasherState(state);
   }
 
-  const serialized = serializeStorageChargeState(storageCharge, { washers });
+  const serialized = serializeStorageChargeState(storageCharge, {
+    generators: Object.fromEntries(generatorCharge),
+    washers,
+  });
 
   try {
     world.setDynamicProperty(ENERGY_STATE_KEY, serialized);

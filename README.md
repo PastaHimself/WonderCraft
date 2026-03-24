@@ -70,7 +70,7 @@ INGOTS (needs recipe)
 * tin_ingot
 * zinc_ingot
 
-Energy Storage Units
+Energy Storage Units:
 Basic Battery
 Recipe: Copper Ingot + Redstone + Iron Ingot
 Storage: 512 W
